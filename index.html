@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#081126" />
+    <meta name="description" content="PulseMesh — secure, decentralized-first, neon-modern messaging super app." />
+    <title>PulseMesh — Secure Messaging Super App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="nebula nebula-a"></div>
+    <div class="nebula nebula-b"></div>
+    <div class="nebula nebula-c"></div>
+
+    <main class="shell">
+      <header class="top glass">
+        <div class="brand">
+          <div class="logo">PM</div>
+          <div>
+            <h1>PulseMesh</h1>
+            <p>Secure communication for real people</p>
+          </div>
+        </div>
+
+        <div class="quick-actions">
+          <button id="installBtn" class="chip primary hidden">⬇ Install App</button>
+          <button id="themeBtn" class="chip">🌗 Theme</button>
+          <button id="newContactBtn" class="chip">👤 Add Contact</button>
+        </div>
+      </header>
+
+      <section class="layout">
+        <aside class="left glass">
+          <div class="search-row">
+            <input id="globalSearch" type="text" placeholder="Search chats, contacts, channels..." />
+          </div>
+
+          <div class="section-tabs" role="tablist" aria-label="Workspace sections">
+            <button class="tab active" data-panel="chats">Chats</button>
+            <button class="tab" data-panel="status">Status</button>
+            <button class="tab" data-panel="calls">Calls</button>
+            <button class="tab" data-panel="communities">Communities</button>
+            <button class="tab" data-panel="channels">Channels</button>
+            <button class="tab" data-panel="settings">Settings</button>
+          </div>
+
+          <div id="panel-chats" class="panel active"></div>
+          <div id="panel-status" class="panel"></div>
+          <div id="panel-calls" class="panel"></div>
+          <div id="panel-communities" class="panel"></div>
+          <div id="panel-channels" class="panel"></div>
+          <div id="panel-settings" class="panel"></div>
+        </aside>
+
+        <section class="center glass">
+          <header class="chat-head">
+            <div class="avatar" id="activeAvatar"></div>
+            <div>
+              <h2 id="activeTitle">Welcome to PulseMesh</h2>
+              <p id="activeSubtitle">Sign in with phone, add contacts, and start chatting.</p>
+            </div>
+            <div class="chat-head-tools">
+              <button id="voiceCallBtn" class="chip">📞 Voice</button>
+              <button id="videoCallBtn" class="chip">🎥 Video</button>
+            </div>
+          </header>
+
+          <div class="chat-meta-row">
+            <span class="pill" id="securityBadge">🔒 End-to-end encrypted</span>
+            <span class="pill" id="disappearingBadge">⏱ Disappearing: Off</span>
+            <button id="toggleDisappear" class="chip small">Toggle Disappearing</button>
+            <button id="exportBtn" class="chip small">Export Chat</button>
+          </div>
+
+          <div id="messageList" class="message-list"></div>
+
+          <form id="composer" class="composer">
+            <button id="emojiBtn" type="button" class="icon-btn" title="Emoji">😊</button>
+            <button id="recordBtn" type="button" class="icon-btn" title="Voice note">🎙</button>
+            <button id="attachBtn" type="button" class="icon-btn" title="Attachment">📎</button>
+            <input id="composerInput" type="text" placeholder="Message securely..." required />
+            <button id="scheduleBtn" type="button" class="icon-btn" title="Schedule">🕒</button>
+            <button type="submit" class="send">Send ✨</button>
+            <input id="fileInput" type="file" hidden multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" />
+          </form>
+        </section>
+
+        <aside class="right glass">
+          <h3>Launch Controls</h3>
+          <div class="feature-card">
+            <h4>Onboarding</h4>
+            <p>Phone login and profile setup like WhatsApp.</p>
+            <button id="loginBtn" class="chip small">📱 Login</button>
+            <button id="profileBtn" class="chip small">Create Profile</button>
+          </div>
+          <div class="feature-card">
+            <h4>Status</h4>
+            <p>Create photo/text status updates for your contacts.</p>
+            <button id="addStatusBtn" class="chip small">➕ Post Status</button>
+          </div>
+          <div class="feature-card">
+            <h4>Channels</h4>
+            <p>Create channels and publish updates.</p>
+            <button id="createChannelBtn" class="chip small">📣 New Channel</button>
+          </div>
+          <div class="feature-card">
+            <h4>Privacy Center</h4>
+            <p>Passcode, encrypted export, and recovery phrase.</p>
+            <button id="passcodeBtn" class="chip small">Set Passcode</button>
+            <button id="seedBtn" class="chip small">Generate Seed</button>
+          </div>
+          <div class="feature-card">
+            <h4>Storage</h4>
+            <p id="storageStat">Analyzing storage...</p>
+            <button id="clearBtn" class="chip small danger">Clear Local Data</button>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <dialog id="modal" class="modal">
+      <div class="modal-card glass">
+        <h3 id="modalTitle">Info</h3>
+        <pre id="modalBody"></pre>
+        <button id="modalClose" class="chip">Close</button>
+      </div>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
