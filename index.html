@@ -30,14 +30,14 @@
         <div class="quick-actions">
           <button id="installBtn" class="chip primary hidden">⬇ Install App</button>
           <button id="themeBtn" class="chip">🌗 Theme</button>
-          <button id="newChatBtn" class="chip">➕ New Chat</button>
+          <button id="newContactBtn" class="chip">👤 Add Contact</button>
         </div>
       </header>
 
       <section class="layout">
         <aside class="left glass">
           <div class="search-row">
-            <input id="globalSearch" type="text" placeholder="Search chats, channels, contacts, files..." />
+            <input id="globalSearch" type="text" placeholder="Search chats, contacts, channels..." />
           </div>
 
           <div class="section-tabs" role="tablist" aria-label="Workspace sections">
@@ -62,12 +62,11 @@
             <div class="avatar" id="activeAvatar"></div>
             <div>
               <h2 id="activeTitle">Welcome to PulseMesh</h2>
-              <p id="activeSubtitle">Create your first chat to get started</p>
+              <p id="activeSubtitle">Sign in with phone, add contacts, and start chatting.</p>
             </div>
             <div class="chat-head-tools">
-              <button class="chip">📞 Voice</button>
-              <button class="chip">🎥 Video</button>
-              <button class="chip">🛰 Private Sync</button>
+              <button id="voiceCallBtn" class="chip">📞 Voice</button>
+              <button id="videoCallBtn" class="chip">🎥 Video</button>
             </div>
           </header>
 
@@ -87,6 +86,7 @@
             <input id="composerInput" type="text" placeholder="Message securely..." required />
             <button id="scheduleBtn" type="button" class="icon-btn" title="Schedule">🕒</button>
             <button type="submit" class="send">Send ✨</button>
+            <input id="fileInput" type="file" hidden multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" />
           </form>
         </section>
 
@@ -94,18 +94,24 @@
           <h3>Launch Controls</h3>
           <div class="feature-card">
             <h4>Onboarding</h4>
-            <p>Create profile, invite people, and start real conversations.</p>
+            <p>Phone login and profile setup like WhatsApp.</p>
+            <button id="loginBtn" class="chip small">📱 Login</button>
             <button id="profileBtn" class="chip small">Create Profile</button>
-            <button id="inviteBtn" class="chip small">Copy Invite Link</button>
+          </div>
+          <div class="feature-card">
+            <h4>Status</h4>
+            <p>Create photo/text status updates for your contacts.</p>
+            <button id="addStatusBtn" class="chip small">➕ Post Status</button>
+          </div>
+          <div class="feature-card">
+            <h4>Channels</h4>
+            <p>Create channels and publish updates.</p>
+            <button id="createChannelBtn" class="chip small">📣 New Channel</button>
           </div>
           <div class="feature-card">
             <h4>Privacy Center</h4>
-            <p>Local encrypted vault, passcode lock, and export control.</p>
+            <p>Passcode, encrypted export, and recovery phrase.</p>
             <button id="passcodeBtn" class="chip small">Set Passcode</button>
-          </div>
-          <div class="feature-card">
-            <h4>Decentralized Sync</h4>
-            <p>Generate recovery phrase for cross-device identity restore.</p>
             <button id="seedBtn" class="chip small">Generate Seed</button>
           </div>
           <div class="feature-card">
