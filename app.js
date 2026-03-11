@@ -1,71 +1,20 @@
 const state = {
-  activeChatId: "c1",
+  activeChatId: null,
   disappearing: false,
   installPromptEvent: null,
   voiceRecorder: null,
   recordedChunks: []
 };
 
-const storeKey = "pulsemesh.v1";
+const storeKey = "pulsemesh.v2";
 
 const db = {
-  profile: { name: "You", handle: "@founder", secureMode: true },
-  chats: [
-    {
-      id: "c1",
-      name: "Ava Knight",
-      role: "Design Lead",
-      unread: 3,
-      pinned: true,
-      muted: false,
-      messages: [
-        { from: "them", text: "I shipped the motion refresh with 120fps effects.", ts: Date.now() - 600000 },
-        { from: "me", text: "Beautiful. Ship to production after QA.", ts: Date.now() - 420000 },
-        { from: "them", text: "Done. Users are loving the smooth transitions ✨", ts: Date.now() - 120000 }
-      ]
-    },
-    {
-      id: "c2",
-      name: "Core Engineering",
-      role: "Team Space",
-      unread: 8,
-      pinned: true,
-      muted: false,
-      messages: [
-        { from: "them", text: "Mesh relay fallback latency is now 38ms avg.", ts: Date.now() - 520000 },
-        { from: "me", text: "Great. Keep all calls under 100ms startup.", ts: Date.now() - 310000 }
-      ]
-    },
-    {
-      id: "c3",
-      name: "Growth Ops",
-      role: "Marketing",
-      unread: 0,
-      pinned: false,
-      muted: true,
-      messages: [{ from: "them", text: "New invite conversion is +14%.", ts: Date.now() - 860000 }]
-    }
-  ],
-  status: [
-    ["Nina", "2 min ago • Product launch storyboard"],
-    ["Rahul", "44 min ago • New voice note waveforms"],
-    ["Alex", "1h ago • Dark/light design teaser"]
-  ],
-  calls: [
-    ["Ava Knight", "Video • 18 min • End-to-end encrypted"],
-    ["Core Engineering", "Voice group • 31 min • Crystal HD"],
-    ["Parent Group", "Missed • 3 ring attempts"]
-  ],
-  communities: [
-    ["PulseMesh Beta", "10,204 members • Announcements + Events"],
-    ["Founders Hub", "2,011 members • Private room network"],
-    ["Creators Grid", "55,300 members • Monetized channels"]
-  ],
-  channels: [
-    ["Product Updates", "4.8M followers • Official release notes"],
-    ["AI Security Feed", "184k followers • Threat intelligence"],
-    ["Open Source Labs", "92k followers • Community builds"]
-  ]
+  profile: { name: "", handle: "", created: false },
+  chats: [],
+  status: [],
+  calls: [],
+  communities: [],
+  channels: []
 };
 
 const el = {
@@ -83,12 +32,12 @@ const el = {
   subtitle: document.querySelector("#activeSubtitle"),
   composer: document.querySelector("#composer"),
   composerInput: document.querySelector("#composerInput"),
-  typing: document.querySelector("#typingIndicator"),
   themeBtn: document.querySelector("#themeBtn"),
-  lockBtn: document.querySelector("#lockBtn"),
   installBtn: document.querySelector("#installBtn"),
+  newChatBtn: document.querySelector("#newChatBtn"),
+  profileBtn: document.querySelector("#profileBtn"),
+  inviteBtn: document.querySelector("#inviteBtn"),
   passcodeBtn: document.querySelector("#passcodeBtn"),
-  aiSummaryBtn: document.querySelector("#aiSummaryBtn"),
   seedBtn: document.querySelector("#seedBtn"),
   clearBtn: document.querySelector("#clearBtn"),
   exportBtn: document.querySelector("#exportBtn"),
@@ -105,8 +54,16 @@ const el = {
   modalClose: document.querySelector("#modalClose")
 };
 
+function uid() {
+  return `c-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function escapeHtml(text) {
+  return text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
 function saveState() {
-  localStorage.setItem(storeKey, JSON.stringify({ db, state: { disappearing: state.disappearing, activeChatId: state.activeChatId } }));
+  localStorage.setItem(storeKey, JSON.stringify({ db, state: { activeChatId: state.activeChatId, disappearing: state.disappearing } }));
 }
 
 function loadState() {
@@ -114,7 +71,7 @@ function loadState() {
   if (!raw) return;
   try {
     const parsed = JSON.parse(raw);
-    if (parsed?.db?.chats) db.chats = parsed.db.chats;
+    if (parsed?.db) Object.assign(db, parsed.db);
     if (parsed?.state?.activeChatId) state.activeChatId = parsed.state.activeChatId;
     if (typeof parsed?.state?.disappearing === "boolean") state.disappearing = parsed.state.disappearing;
   } catch {
@@ -127,99 +84,117 @@ function fmtTime(ts) {
 }
 
 function getActiveChat() {
-  return db.chats.find((c) => c.id === state.activeChatId) ?? db.chats[0];
+  return db.chats.find((c) => c.id === state.activeChatId) || null;
 }
 
-function itemCard({ id, title, subtitle, unread = 0, active = false, extra = "" }) {
+function emptyCard(message) {
+  return `<article class="item"><div class="meta"><h4>${message}</h4><p>Use “New Chat” to add real contacts and start messaging.</p></div></article>`;
+}
+
+function itemCard({ id, title, subtitle, unread = 0, active = false }) {
   return `<article class="item ${active ? "active" : ""}" data-id="${id}">
     <div class="avatar"></div>
-    <div class="meta"><h4>${title}</h4><p>${subtitle}</p></div>
-    ${extra}
+    <div class="meta"><h4>${escapeHtml(title)}</h4><p>${escapeHtml(subtitle)}</p></div>
     ${unread ? `<span class="badge">${unread}</span>` : ""}
   </article>`;
 }
 
 function renderChats(filter = "") {
-  const q = filter.toLowerCase().trim();
-  const sorted = [...db.chats].sort((a, b) => Number(b.pinned) - Number(a.pinned));
-  const visible = sorted.filter((c) => `${c.name} ${c.role} ${c.messages.map((m) => m.text).join(" ")}`.toLowerCase().includes(q));
+  const q = filter.trim().toLowerCase();
+  const visible = db.chats.filter((c) => `${c.name} ${c.role} ${c.messages.map((m) => m.text).join(" ")}`.toLowerCase().includes(q));
+  if (!visible.length) {
+    el.chatsPanel.innerHTML = emptyCard("No chats yet");
+    return;
+  }
   el.chatsPanel.innerHTML = visible
     .map((c) =>
       itemCard({
         id: c.id,
-        title: `${c.pinned ? "📌 " : ""}${c.name}`,
-        subtitle: `${c.role} • ${c.messages.at(-1)?.text ?? "No messages yet"}`,
+        title: c.name,
+        subtitle: `${c.role} • ${c.messages.at(-1)?.text || "No messages yet"}`,
         unread: c.unread,
-        active: c.id === state.activeChatId,
-        extra: c.muted ? `<span class="badge">Muted</span>` : ""
+        active: c.id === state.activeChatId
       })
     )
     .join("");
 }
 
-function renderList(panel, rows) {
-  panel.innerHTML = rows
-    .map(([title, subtitle], i) => itemCard({ id: `r${i}`, title, subtitle }))
-    .join("");
+function renderList(panel, rows, heading) {
+  if (!rows.length) {
+    panel.innerHTML = emptyCard(`No ${heading} yet`);
+    return;
+  }
+  panel.innerHTML = rows.map(([title, subtitle], i) => itemCard({ id: `r${heading}-${i}`, title, subtitle })).join("");
 }
 
 function renderSettings() {
   const rows = [
-    ["Account & Identity", "Phone alias, usernames, devices"],
-    ["Privacy Controls", "Blocked users, read receipts, online visibility"],
-    ["Security & Encryption", "Biometric lock, session keys, passcode vault"],
-    ["Storage & Data", "Manage cached media, exports, backups"],
-    ["Decentralized Mesh", "Peer identity phrase, direct tunnel mode"]
+    ["Account", "Edit profile, username, and linked devices"],
+    ["Privacy", "Read receipts, blocked users, disappearing messages"],
+    ["Chats", "Theme, wallpaper, and backup controls"],
+    ["Storage", "Manage media and local cache"],
+    ["Security", "Passcode lock and encrypted export"]
   ];
-  renderList(el.settingsPanel, rows);
+  renderList(el.settingsPanel, rows, "settings");
 }
 
 function renderMessages() {
   const chat = getActiveChat();
-  state.activeChatId = chat.id;
+  if (!chat) {
+    el.title.textContent = "Welcome to PulseMesh";
+    el.subtitle.textContent = "No chats yet — create one to start messaging real people.";
+    el.list.innerHTML = `<article class="msg them"><div>Your chat timeline is empty.</div><div class="msg-time">Invite someone and begin securely.</div></article>`;
+    return;
+  }
+
   el.title.textContent = chat.name;
-  el.subtitle.textContent = `${chat.role} • Last sync just now • ${chat.muted ? "Muted" : "Active"}`;
-
+  el.subtitle.textContent = `${chat.role} • encrypted session active`;
   el.list.innerHTML = chat.messages
-    .map(
-      (m, idx) => `<article class="msg ${m.from}" data-msg-index="${idx}" title="Click to react">
-        <div>${m.text}</div>
-        <div class="msg-time">${fmtTime(m.ts)}${m.secure ? " • secure" : ""}</div>
-      </article>`
-    )
+    .map((m) => `<article class="msg ${m.from}"><div>${escapeHtml(m.text)}</div><div class="msg-time">${fmtTime(m.ts)}</div></article>`)
     .join("");
-
   el.list.scrollTop = el.list.scrollHeight;
-  saveState();
 }
 
 function renderAll(filter = "") {
   renderChats(filter);
-  renderList(el.statusPanel, db.status);
-  renderList(el.callsPanel, db.calls);
-  renderList(el.communitiesPanel, db.communities);
-  renderList(el.channelsPanel, db.channels);
+  renderList(el.statusPanel, db.status, "status updates");
+  renderList(el.callsPanel, db.calls, "calls");
+  renderList(el.communitiesPanel, db.communities, "communities");
+  renderList(el.channelsPanel, db.channels, "channels");
   renderSettings();
   renderMessages();
   el.disappearingBadge.textContent = `⏱ Disappearing: ${state.disappearing ? "On (2 min)" : "Off"}`;
+  saveState();
 }
 
-function syntheticReply(chat) {
-  const replies = [
-    "Mesh-delivered. Zero central relay in local mode 🛰",
-    "Great — your message is now synced with encrypted local backup.",
-    "Received. Would you like me to generate action items?",
-    "Confirmed. UX feels even smoother than before ⚡"
-  ];
-  const text = replies[Math.floor(Math.random() * replies.length)];
-  chat.messages.push({ from: "them", text, ts: Date.now(), secure: true });
-  chat.unread = 0;
-  renderChats(el.search.value);
-  renderMessages();
+function createProfile() {
+  const name = prompt("Your display name:", db.profile.name || "");
+  if (!name) return;
+  const handle = prompt("Username (without @):", db.profile.handle.replace("@", "") || "");
+  db.profile = { name, handle: `@${(handle || name).replace(/\s+/g, "").toLowerCase()}`, created: true };
+  openModal("Profile Created", `${db.profile.name}\n${db.profile.handle}\n\nNow add your first chat.`);
+  saveState();
+}
+
+function createChat() {
+  const name = prompt("Contact name:");
+  if (!name) return;
+  const role = prompt("About/contact note:", "Contact") || "Contact";
+
+  const chat = {
+    id: uid(),
+    name,
+    role,
+    unread: 0,
+    messages: []
+  };
+  db.chats.unshift(chat);
+  state.activeChatId = chat.id;
+  renderAll(el.search.value);
 }
 
 async function generateSeedPhrase() {
-  const words = ["aurora", "zero", "mesh", "quantum", "vault", "pulse", "nebula", "cipher", "orbit", "signal", "anchor", "neon"];
+  const words = ["pulse", "mesh", "anchor", "orbit", "neon", "cipher", "vault", "signal", "lumen", "secure", "bridge", "node"];
   const arr = new Uint8Array(12);
   crypto.getRandomValues(arr);
   return [...arr].map((n) => words[n % words.length]).join(" ");
@@ -252,15 +227,6 @@ function openModal(title, body) {
   el.modal.showModal();
 }
 
-function closeModal() {
-  el.modal.close();
-}
-
-function installPWA() {
-  if (!state.installPromptEvent) return;
-  state.installPromptEvent.prompt();
-}
-
 function bindEvents() {
   el.tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -271,48 +237,43 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (e) => {
-    const item = e.target.closest("#panel-chats .item");
-    if (item) {
-      state.activeChatId = item.dataset.id;
-      db.chats.forEach((c) => {
-        if (c.id === state.activeChatId) c.unread = 0;
-      });
-      renderChats(el.search.value);
-      renderMessages();
-      return;
-    }
-
-    const msg = e.target.closest(".msg");
-    if (msg) {
-      msg.querySelector("div").textContent += " 💙";
-      saveState();
-    }
+    const item = e.target.closest("#panel-chats .item[data-id]");
+    if (!item) return;
+    state.activeChatId = item.dataset.id;
+    renderAll(el.search.value);
   });
 
   el.search.addEventListener("input", (e) => renderChats(e.target.value));
+  el.themeBtn.addEventListener("click", () => document.body.classList.toggle("light"));
+  el.newChatBtn.addEventListener("click", createChat);
+  el.profileBtn.addEventListener("click", createProfile);
+
+  el.inviteBtn.addEventListener("click", async () => {
+    const link = `${location.origin}${location.pathname}?invite=${Math.random().toString(36).slice(2, 10)}`;
+    await navigator.clipboard?.writeText(link);
+    openModal("Invite Link", `Invite copied:\n${link}`);
+  });
 
   el.composer.addEventListener("submit", (e) => {
     e.preventDefault();
+    const chat = getActiveChat();
+    if (!chat) return openModal("No active chat", "Create a new chat first.");
+
     const text = el.composerInput.value.trim();
     if (!text) return;
+    chat.messages.push({ from: "me", text, ts: Date.now() });
 
-    const chat = getActiveChat();
-    chat.messages.push({ from: "me", text, ts: Date.now(), secure: true });
     if (state.disappearing) {
       setTimeout(() => {
-        chat.messages = chat.messages.filter((m) => !(m.from === "me" && m.text === text));
+        chat.messages = chat.messages.filter((m) => m.text !== text);
         renderMessages();
+        saveState();
       }, 120000);
     }
 
     el.composerInput.value = "";
     renderMessages();
-
-    el.typing.classList.remove("hidden");
-    setTimeout(() => {
-      el.typing.classList.add("hidden");
-      syntheticReply(chat);
-    }, 900);
+    saveState();
   });
 
   el.emojiBtn.addEventListener("click", () => {
@@ -321,24 +282,30 @@ function bindEvents() {
   });
 
   el.scheduleBtn.addEventListener("click", () => {
-    const t = prompt("Schedule message in seconds (e.g., 10):", "10");
-    const secs = Number(t);
-    if (!Number.isFinite(secs) || secs <= 0) return;
+    const chat = getActiveChat();
+    if (!chat) return openModal("No active chat", "Create a new chat first.");
+
+    const value = Number(prompt("Schedule in seconds:", "10"));
+    if (!Number.isFinite(value) || value <= 0) return;
     const msg = el.composerInput.value.trim();
     if (!msg) return;
+
     el.composerInput.value = "";
     setTimeout(() => {
-      const chat = getActiveChat();
-      chat.messages.push({ from: "me", text: `⏰ Scheduled: ${msg}`, ts: Date.now(), secure: true });
+      chat.messages.push({ from: "me", text: `⏰ ${msg}`, ts: Date.now() });
       renderMessages();
-    }, secs * 1000);
+      saveState();
+    }, value * 1000);
   });
 
-  el.attachBtn.addEventListener("click", () => openModal("Attachment", "Attachment picker stub: photos, docs, contacts, location, polls, and payments can be integrated here."));
+  el.attachBtn.addEventListener("click", () => openModal("Attachments", "Attachment picker placeholder for photos, videos, docs, contacts, and location."));
 
   el.recordBtn.addEventListener("click", async () => {
+    const chat = getActiveChat();
+    if (!chat) return openModal("No active chat", "Create a new chat first.");
+
     if (!navigator.mediaDevices?.getUserMedia) {
-      openModal("Voice Note", "Media capture is not available in this browser.");
+      openModal("Voice note", "Audio recording is unavailable in this browser.");
       return;
     }
 
@@ -348,9 +315,9 @@ function bindEvents() {
       state.recordedChunks = [];
       recorder.ondataavailable = (ev) => state.recordedChunks.push(ev.data);
       recorder.onstop = () => {
-        const chat = getActiveChat();
-        chat.messages.push({ from: "me", text: `🎵 Voice note (${state.recordedChunks.length} chunks)`, ts: Date.now(), secure: true });
+        chat.messages.push({ from: "me", text: `🎵 Voice note (${state.recordedChunks.length} chunks)`, ts: Date.now() });
         renderMessages();
+        saveState();
       };
       recorder.start();
       state.voiceRecorder = recorder;
@@ -362,71 +329,49 @@ function bindEvents() {
     }
   });
 
-  el.themeBtn.addEventListener("click", () => document.body.classList.toggle("light"));
-
   el.toggleDisappear.addEventListener("click", () => {
     state.disappearing = !state.disappearing;
     el.disappearingBadge.textContent = `⏱ Disappearing: ${state.disappearing ? "On (2 min)" : "Off"}`;
     saveState();
   });
 
-  el.aiSummaryBtn.addEventListener("click", () => {
-    const chat = getActiveChat();
-    const recent = chat.messages.slice(-20).map((m) => `- ${m.from === "me" ? "You" : chat.name}: ${m.text}`).join("\n");
-    openModal("AI Summary (On-device style)", `Conversation summary for ${chat.name}:\n\n${recent || "No messages."}\n\nSuggested next action:\n- Follow up with clear deadline.\n- Convert key points into tasks.`);
-  });
-
   el.seedBtn.addEventListener("click", async () => {
     const seed = await generateSeedPhrase();
-    openModal("Decentralized Identity Seed", `Store this recovery phrase safely:\n\n${seed}\n\nThis phrase can restore your decentralized identity on another device.`);
+    openModal("Recovery Phrase", `Store this safely:\n\n${seed}`);
   });
 
   el.passcodeBtn.addEventListener("click", () => {
-    const pass = prompt("Set local vault passcode:");
+    const pass = prompt("Set local passcode:");
     if (!pass) return;
     localStorage.setItem("pulsemesh.passcode", btoa(pass));
-    openModal("Passcode Set", "Passcode stored locally for demo. Use platform secure storage in production.");
-  });
-
-  el.lockBtn.addEventListener("click", () => {
-    const expected = localStorage.getItem("pulsemesh.passcode");
-    if (!expected) return openModal("Vault", "No passcode set yet. Use 'Set Passcode'.");
-    const entered = prompt("Enter passcode to unlock vault:");
-    if (btoa(entered || "") === expected) {
-      openModal("Vault", "Vault unlocked successfully ✅");
-    } else {
-      openModal("Vault", "Incorrect passcode ❌");
-    }
+    openModal("Passcode", "Passcode stored for this device.");
   });
 
   el.exportBtn.addEventListener("click", async () => {
     const chat = getActiveChat();
-    const plain = JSON.stringify(chat.messages, null, 2);
-    const secured = await encryptExport(plain);
-    openModal("Encrypted Export", JSON.stringify(secured, null, 2));
+    if (!chat) return openModal("Nothing to export", "Create a chat and send messages first.");
+
+    const payload = await encryptExport(JSON.stringify(chat.messages, null, 2));
+    openModal("Encrypted Export", JSON.stringify(payload, null, 2));
   });
 
   el.clearBtn.addEventListener("click", () => {
-    if (!confirm("Delete all local app data?")) return;
+    if (!confirm("Clear all local app data?")) return;
     localStorage.clear();
     location.reload();
   });
 
-  el.installBtn.addEventListener("click", installPWA);
-  el.modalClose.addEventListener("click", closeModal);
+  el.installBtn.addEventListener("click", () => state.installPromptEvent?.prompt());
+  el.modalClose.addEventListener("click", () => el.modal.close());
 }
 
 function setupPWA() {
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js");
-  }
-
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js");
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     state.installPromptEvent = e;
     el.installBtn.classList.remove("hidden");
   });
-
   window.addEventListener("appinstalled", () => {
     state.installPromptEvent = null;
     el.installBtn.classList.add("hidden");
@@ -434,6 +379,7 @@ function setupPWA() {
 }
 
 loadState();
+if (db.chats.length && !state.activeChatId) state.activeChatId = db.chats[0].id;
 renderAll();
 bindEvents();
 setupPWA();

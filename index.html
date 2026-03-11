@@ -23,14 +23,14 @@
           <div class="logo">PM</div>
           <div>
             <h1>PulseMesh</h1>
-            <p>Decentralized-first secure communication</p>
+            <p>Secure communication for real people</p>
           </div>
         </div>
 
         <div class="quick-actions">
           <button id="installBtn" class="chip primary hidden">⬇ Install App</button>
           <button id="themeBtn" class="chip">🌗 Theme</button>
-          <button id="lockBtn" class="chip">🔐 Lock Vault</button>
+          <button id="newChatBtn" class="chip">➕ New Chat</button>
         </div>
       </header>
 
@@ -62,25 +62,23 @@
             <div class="avatar" id="activeAvatar"></div>
             <div>
               <h2 id="activeTitle">Welcome to PulseMesh</h2>
-              <p id="activeSubtitle">Encrypted • Offline-first • Smooth realtime UX</p>
+              <p id="activeSubtitle">Create your first chat to get started</p>
             </div>
             <div class="chat-head-tools">
               <button class="chip">📞 Voice</button>
               <button class="chip">🎥 Video</button>
-              <button class="chip">🛰 Mesh</button>
+              <button class="chip">🛰 Private Sync</button>
             </div>
           </header>
 
           <div class="chat-meta-row">
-            <span class="pill" id="securityBadge">🔒 E2EE AES-GCM</span>
+            <span class="pill" id="securityBadge">🔒 End-to-end encrypted</span>
             <span class="pill" id="disappearingBadge">⏱ Disappearing: Off</span>
             <button id="toggleDisappear" class="chip small">Toggle Disappearing</button>
             <button id="exportBtn" class="chip small">Export Chat</button>
           </div>
 
           <div id="messageList" class="message-list"></div>
-
-          <div id="typingIndicator" class="typing hidden">Someone is typing...</div>
 
           <form id="composer" class="composer">
             <button id="emojiBtn" type="button" class="icon-btn" title="Emoji">😊</button>
@@ -93,20 +91,21 @@
         </section>
 
         <aside class="right glass">
-          <h3>Power Features</h3>
+          <h3>Launch Controls</h3>
+          <div class="feature-card">
+            <h4>Onboarding</h4>
+            <p>Create profile, invite people, and start real conversations.</p>
+            <button id="profileBtn" class="chip small">Create Profile</button>
+            <button id="inviteBtn" class="chip small">Copy Invite Link</button>
+          </div>
           <div class="feature-card">
             <h4>Privacy Center</h4>
-            <p>Local encrypted vault, passcode lock, and privacy diagnostics.</p>
+            <p>Local encrypted vault, passcode lock, and export control.</p>
             <button id="passcodeBtn" class="chip small">Set Passcode</button>
           </div>
           <div class="feature-card">
-            <h4>AI Assist</h4>
-            <p>Summarize chats, smart replies, and action extraction (on-device ready).</p>
-            <button id="aiSummaryBtn" class="chip small">Summarize Last 20</button>
-          </div>
-          <div class="feature-card">
             <h4>Decentralized Sync</h4>
-            <p>Mesh-mode seed + backup phrase preview for cross-device identity control.</p>
+            <p>Generate recovery phrase for cross-device identity restore.</p>
             <button id="seedBtn" class="chip small">Generate Seed</button>
           </div>
           <div class="feature-card">
