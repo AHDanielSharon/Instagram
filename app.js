@@ -3,10 +3,11 @@ const state = {
   disappearing: false,
   installPromptEvent: null,
   voiceRecorder: null,
-  recordedChunks: []
+  recordedChunks: [],
+  generatedOtp: null
 };
 
-const storeKey = "pulsemesh.v3";
+const storeKey = "pulsemesh.v4";
 
 const db = {
   auth: { loggedIn: false, phone: "", verified: false },
@@ -38,7 +39,6 @@ const el = {
   installBtn: document.querySelector("#installBtn"),
   newContactBtn: document.querySelector("#newContactBtn"),
   loginBtn: document.querySelector("#loginBtn"),
-  profileBtn: document.querySelector("#profileBtn"),
   addStatusBtn: document.querySelector("#addStatusBtn"),
   createChannelBtn: document.querySelector("#createChannelBtn"),
   passcodeBtn: document.querySelector("#passcodeBtn"),
@@ -55,6 +55,15 @@ const el = {
   videoCallBtn: document.querySelector("#videoCallBtn"),
   fileInput: document.querySelector("#fileInput"),
   storageStat: document.querySelector("#storageStat"),
+  authOverlay: document.querySelector("#authOverlay"),
+  authForm: document.querySelector("#authForm"),
+  phoneInput: document.querySelector("#phoneInput"),
+  otpInput: document.querySelector("#otpInput"),
+  nameInput: document.querySelector("#nameInput"),
+  aboutInput: document.querySelector("#aboutInput"),
+  sendOtpBtn: document.querySelector("#sendOtpBtn"),
+  cancelAuthBtn: document.querySelector("#cancelAuthBtn"),
+  otpHint: document.querySelector("#otpHint"),
   modal: document.querySelector("#modal"),
   modalTitle: document.querySelector("#modalTitle"),
   modalBody: document.querySelector("#modalBody"),
@@ -62,7 +71,8 @@ const el = {
 };
 
 const uid = () => `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-const esc = (t) => t.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+const phoneOk = (v) => /^\+[1-9]\d{7,14}$/.test(v);
 
 function saveState() {
   localStorage.setItem(storeKey, JSON.stringify({ db, state: { activeChatId: state.activeChatId, disappearing: state.disappearing } }));
@@ -95,188 +105,84 @@ function openModal(title, body) {
   el.modal.showModal();
 }
 
-function emptyCard(title, subtitle) {
-  return `<article class="item"><div class="meta"><h4>${esc(title)}</h4><p>${esc(subtitle)}</p></div></article>`;
-}
-
-function itemCard({ id, title, subtitle, unread = 0, active = false }) {
-  return `<article class="item ${active ? "active" : ""}" data-id="${id}">
-    <div class="avatar"></div>
-    <div class="meta"><h4>${esc(title)}</h4><p>${esc(subtitle)}</p></div>
-    ${unread ? `<span class="badge">${unread}</span>` : ""}
-  </article>`;
-}
-
-function ensureChatForContact(contact) {
-  let chat = db.chats.find((c) => c.phone === contact.phone);
-  if (!chat) {
-    chat = { id: uid(), phone: contact.phone, name: contact.name, role: contact.phone, unread: 0, messages: [] };
-    db.chats.unshift(chat);
-  }
-  return chat;
+function card(title, subtitle, id = "", active = false, unread = 0) {
+  const attr = id ? `data-id="${id}"` : "";
+  return `<article class="item ${active ? "active" : ""}" ${attr}><div class="avatar"></div><div class="meta"><h4>${esc(title)}</h4><p>${esc(subtitle)}</p></div>${unread ? `<span class="badge">${unread}</span>` : ""}</article>`;
 }
 
 function renderChats(filter = "") {
   const q = filter.trim().toLowerCase();
   const visible = db.chats.filter((c) => `${c.name} ${c.phone} ${c.messages.map((m) => m.text).join(" ")}`.toLowerCase().includes(q));
-  if (!visible.length) {
-    el.chatsPanel.innerHTML = emptyCard("0 contacts / 0 chats", "Add a contact by phone number to start.");
-    return;
-  }
-  el.chatsPanel.innerHTML = visible
-    .map((c) =>
-      itemCard({
-        id: c.id,
-        title: c.name,
-        subtitle: `${c.phone} • ${c.messages.at(-1)?.text || "No messages yet"}`,
-        unread: c.unread,
-        active: c.id === state.activeChatId
-      })
-    )
-    .join("");
+  el.chatsPanel.innerHTML = visible.length
+    ? visible.map((c) => card(c.name, `${c.phone} • ${c.messages.at(-1)?.text || "No messages yet"}`, c.id, c.id === state.activeChatId, c.unread)).join("")
+    : card("0 contacts / 0 chats", "Add a contact by phone number to start chatting.");
 }
 
-function renderStatus() {
-  if (!db.status.length) {
-    el.statusPanel.innerHTML = emptyCard("No status yet", "Post your first text/photo/video status.");
-    return;
-  }
-  el.statusPanel.innerHTML = db.status.map((s, i) => itemCard({ id: `s-${i}`, title: s.author, subtitle: `${s.type} • ${s.text}` })).join("");
-}
-
-function renderCalls() {
-  if (!db.calls.length) {
-    el.callsPanel.innerHTML = emptyCard("No calls yet", "Start a voice or video call from a chat.");
-    return;
-  }
-  el.callsPanel.innerHTML = db.calls.map((c, i) => itemCard({ id: `call-${i}`, title: c.with, subtitle: `${c.mode} • ${c.when}` })).join("");
-}
-
-function renderChannels() {
-  if (!db.channels.length) {
-    el.channelsPanel.innerHTML = emptyCard("No channels yet", "Create a channel to publish updates.");
-    return;
-  }
-  el.channelsPanel.innerHTML = db.channels.map((c, i) => itemCard({ id: `ch-${i}`, title: c.name, subtitle: `${c.followers} followers` })).join("");
-}
-
-function renderCommunities() {
-  if (!db.communities.length) {
-    el.communitiesPanel.innerHTML = emptyCard("No communities yet", "Create a community when your members join.");
-    return;
-  }
-  el.communitiesPanel.innerHTML = db.communities.map((c, i) => itemCard({ id: `co-${i}`, title: c.name, subtitle: `${c.members} members` })).join("");
+function renderList(panel, rows, emptyTitle, emptySubtitle) {
+  panel.innerHTML = rows.length ? rows.map((r, i) => card(r.title, r.subtitle, `${emptyTitle}-${i}`)).join("") : card(emptyTitle, emptySubtitle);
 }
 
 function renderSettings() {
   const rows = [
-    ["Phone Login", db.auth.loggedIn ? `Logged in as ${db.auth.phone}` : "Not logged in"],
-    ["Profile", db.profile.created ? `${db.profile.name} • ${db.profile.about}` : "Not created"],
-    ["Privacy", "Passcode, disappearing messages, export"],
-    ["Media", "Send PDF, images, videos, music, links, documents"],
-    ["Calls", "Voice and video calling controls"]
+    { title: "Phone", subtitle: db.auth.loggedIn ? db.auth.phone : "Not logged in" },
+    { title: "Profile", subtitle: db.profile.created ? `${db.profile.name} • ${db.profile.about}` : "Not created" },
+    { title: "Contacts", subtitle: `${db.contacts.length} saved` },
+    { title: "Media", subtitle: "PDF, image, video, music, links, docs" },
+    { title: "Calls", subtitle: `${db.calls.length} history entries` }
   ];
-  el.settingsPanel.innerHTML = rows.map((r, i) => itemCard({ id: `set-${i}`, title: r[0], subtitle: r[1] })).join("");
+  renderList(el.settingsPanel, rows, "No settings", "Settings will appear here.");
 }
 
 function renderMessages() {
   const chat = getActiveChat();
   if (!chat) {
     el.title.textContent = "Welcome to PulseMesh";
-    el.subtitle.textContent = "0 contacts. Login, add contact by phone, then chat.";
-    el.list.innerHTML = `<article class="msg them"><div>No active chat.</div><div class="msg-time">Add a contact to start.</div></article>`;
+    el.subtitle.textContent = "Login with phone number and add contacts to begin.";
+    el.list.innerHTML = `<article class="msg them"><div>No active chat.</div><div class="msg-time">Start by adding a contact.</div></article>`;
     return;
   }
-
   el.title.textContent = chat.name;
-  el.subtitle.textContent = `${chat.phone} • encrypted session`;
-  el.list.innerHTML = chat.messages
-    .map((m) => `<article class="msg ${m.from}"><div>${esc(m.text)}</div><div class="msg-time">${fmtTime(m.ts)}</div></article>`)
-    .join("");
+  el.subtitle.textContent = `${chat.phone} • end-to-end encrypted`;
+  el.list.innerHTML = chat.messages.map((m) => `<article class="msg ${m.from}"><div>${esc(m.text)}</div><div class="msg-time">${fmtTime(m.ts)}</div></article>`).join("");
   el.list.scrollTop = el.list.scrollHeight;
 }
 
 function renderAll(filter = "") {
   renderChats(filter);
-  renderStatus();
-  renderCalls();
-  renderCommunities();
-  renderChannels();
+  renderList(el.statusPanel, db.status.map((s) => ({ title: s.author, subtitle: `${s.type} • ${s.text}` })), "No status yet", "Post your first status.");
+  renderList(el.callsPanel, db.calls.map((c) => ({ title: c.with, subtitle: `${c.mode} • ${c.when}` })), "No calls yet", "Start voice/video call from chat.");
+  renderList(el.communitiesPanel, db.communities.map((c) => ({ title: c.name, subtitle: `${c.members} members` })), "No communities yet", "Create after users join.");
+  renderList(el.channelsPanel, db.channels.map((c) => ({ title: c.name, subtitle: `${c.followers} followers` })), "No channels yet", "Create your first channel.");
   renderSettings();
   renderMessages();
   el.disappearingBadge.textContent = `⏱ Disappearing: ${state.disappearing ? "On (2 min)" : "Off"}`;
   saveState();
 }
 
-function loginFlow() {
-  const phone = prompt("Enter phone number with country code (example +919999999999):", db.auth.phone || "");
-  if (!phone) return;
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
-  const entered = prompt(`OTP sent to ${phone}. Demo OTP: ${otp}\nEnter OTP:`);
-  if (entered !== otp) {
-    openModal("Login failed", "Incorrect OTP.");
-    return;
-  }
-  db.auth = { loggedIn: true, phone, verified: true };
-  openModal("Login successful", `Logged in as ${phone}`);
-  renderAll(el.search.value);
+function showAuth() {
+  el.authOverlay.classList.remove("hidden");
+  el.phoneInput.value = db.auth.phone || "";
+  el.nameInput.value = db.profile.name || "";
+  el.aboutInput.value = db.profile.about || "";
 }
 
-function profileFlow() {
-  if (!db.auth.loggedIn) return openModal("Login required", "Please login with phone number first.");
-  const name = prompt("Profile name:", db.profile.name || "");
-  if (!name) return;
-  const about = prompt("About:", db.profile.about || "Available") || "Available";
-  db.profile = { name, about, created: true };
-  renderAll(el.search.value);
+function hideAuth() {
+  el.authOverlay.classList.add("hidden");
 }
 
 function addContactFlow() {
-  if (!db.auth.loggedIn) return openModal("Login required", "Please login with phone number first.");
-  const phone = prompt("Enter contact phone number:");
-  if (!phone) return;
-  const name = prompt("Save contact name:", phone) || phone;
-  if (db.contacts.some((c) => c.phone === phone)) return openModal("Contact exists", "This phone number is already saved.");
+  if (!db.auth.loggedIn) return showAuth();
+  const phone = prompt("Enter contact phone number with country code (example +447700900123):");
+  if (!phoneOk(phone || "")) return openModal("Invalid phone", "Use international format like +447700900123");
+  const name = prompt("Enter contact name:") || phone;
+  if (db.contacts.some((c) => c.phone === phone)) return openModal("Already exists", "This contact is already saved.");
 
   const contact = { id: uid(), phone, name };
   db.contacts.push(contact);
-  const chat = ensureChatForContact(contact);
+  const chat = { id: uid(), phone, name, unread: 0, messages: [] };
+  db.chats.unshift(chat);
   state.activeChatId = chat.id;
   renderAll(el.search.value);
-}
-
-function callFlow(mode) {
-  const chat = getActiveChat();
-  if (!chat) return openModal("No active contact", `Add/select a contact before starting ${mode.toLowerCase()} call.`);
-  db.calls.unshift({ with: `${chat.name} (${chat.phone})`, mode, when: new Date().toLocaleString() });
-  openModal(`${mode} Call`, `${mode} call started with ${chat.name}.\n\nIn production this requires realtime signaling + media servers.`);
-  renderCalls();
-  saveState();
-}
-
-async function generateSeedPhrase() {
-  const words = ["pulse", "mesh", "anchor", "orbit", "neon", "cipher", "vault", "signal", "lumen", "secure", "bridge", "node"];
-  const arr = new Uint8Array(12);
-  crypto.getRandomValues(arr);
-  return [...arr].map((n) => words[n % words.length]).join(" ");
-}
-
-async function encryptExport(text) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
-  const encoded = new TextEncoder().encode(text);
-  const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
-  return { iv: btoa(String.fromCharCode(...iv)), payload: btoa(String.fromCharCode(...new Uint8Array(cipher))) };
-}
-
-async function updateStorageStats() {
-  if (!navigator.storage?.estimate) {
-    el.storageStat.textContent = "Storage API unavailable in this browser.";
-    return;
-  }
-  const est = await navigator.storage.estimate();
-  const mb = (n) => ((n ?? 0) / (1024 * 1024)).toFixed(2);
-  el.storageStat.textContent = `Used ${mb(est.usage)} MB / Quota ${mb(est.quota)} MB`;
 }
 
 function sendMessage(text) {
@@ -295,14 +201,42 @@ function sendMessage(text) {
   saveState();
 }
 
+function callFlow(mode) {
+  const chat = getActiveChat();
+  if (!chat) return openModal("No active contact", "Select a contact first.");
+  db.calls.unshift({ with: `${chat.name} (${chat.phone})`, mode, when: new Date().toLocaleString() });
+  renderAll(el.search.value);
+  openModal(`${mode} call`, `Started ${mode.toLowerCase()} call with ${chat.name}.`);
+}
+
+async function generateSeedPhrase() {
+  const words = ["pulse", "mesh", "anchor", "orbit", "neon", "cipher", "vault", "signal", "lumen", "secure", "bridge", "node"];
+  const arr = new Uint8Array(12);
+  crypto.getRandomValues(arr);
+  return [...arr].map((n) => words[n % words.length]).join(" ");
+}
+
+async function encryptExport(text) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+  const encoded = new TextEncoder().encode(text);
+  const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+  return { iv: btoa(String.fromCharCode(...iv)), payload: btoa(String.fromCharCode(...new Uint8Array(cipher))) };
+}
+
+async function updateStorageStats() {
+  if (!navigator.storage?.estimate) return (el.storageStat.textContent = "Storage API unavailable.");
+  const est = await navigator.storage.estimate();
+  const mb = (n) => ((n ?? 0) / (1024 * 1024)).toFixed(2);
+  el.storageStat.textContent = `Used ${mb(est.usage)} MB / Quota ${mb(est.quota)} MB`;
+}
+
 function bindEvents() {
-  el.tabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      el.tabs.forEach((t) => t.classList.toggle("active", t === tab));
-      const panel = tab.dataset.panel;
-      el.panels.forEach((p) => p.classList.toggle("active", p.id === `panel-${panel}`));
-    });
-  });
+  el.tabs.forEach((tab) => tab.addEventListener("click", () => {
+    el.tabs.forEach((t) => t.classList.toggle("active", t === tab));
+    const panel = tab.dataset.panel;
+    el.panels.forEach((p) => p.classList.toggle("active", p.id === `panel-${panel}`));
+  }));
 
   document.addEventListener("click", (e) => {
     const item = e.target.closest("#panel-chats .item[data-id]");
@@ -313,25 +247,51 @@ function bindEvents() {
 
   el.search.addEventListener("input", (e) => renderChats(e.target.value));
   el.themeBtn.addEventListener("click", () => document.body.classList.toggle("light"));
-  el.loginBtn.addEventListener("click", loginFlow);
-  el.profileBtn.addEventListener("click", profileFlow);
+  el.loginBtn.addEventListener("click", showAuth);
   el.newContactBtn.addEventListener("click", addContactFlow);
 
+  el.sendOtpBtn.addEventListener("click", () => {
+    const phone = el.phoneInput.value.trim();
+    if (!phoneOk(phone)) return openModal("Invalid number", "Enter phone like +919999999999.");
+    state.generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
+    el.otpHint.textContent = `Demo OTP: ${state.generatedOtp}`;
+  });
+
+  el.authForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const phone = el.phoneInput.value.trim();
+    const otp = el.otpInput.value.trim();
+    const name = el.nameInput.value.trim();
+    const about = el.aboutInput.value.trim() || "Available";
+
+    if (!phoneOk(phone)) return openModal("Invalid number", "Enter valid phone with country code.");
+    if (!state.generatedOtp || otp !== state.generatedOtp) return openModal("OTP failed", "Please enter the correct OTP.");
+    if (!name) return openModal("Name required", "Please enter profile name.");
+
+    db.auth = { loggedIn: true, phone, verified: true };
+    db.profile = { name, about, created: true };
+    state.generatedOtp = null;
+    hideAuth();
+    renderAll(el.search.value);
+    openModal("Success", "Account created and logged in successfully.");
+  });
+
+  el.cancelAuthBtn.addEventListener("click", hideAuth);
+
+  el.addStatusBtn.addEventListener("click", () => {
+    if (!db.profile.created) return showAuth();
+    const text = prompt("Status text:");
+    if (!text) return;
+    db.status.unshift({ author: db.profile.name, text, type: "Text" });
+    renderAll(el.search.value);
+  });
+
   el.createChannelBtn.addEventListener("click", () => {
+    if (!db.profile.created) return showAuth();
     const name = prompt("Channel name:");
     if (!name) return;
     db.channels.unshift({ name, followers: 1 });
-    renderChannels();
-    saveState();
-  });
-
-  el.addStatusBtn.addEventListener("click", () => {
-    if (!db.profile.created) return openModal("Create profile first", "Set your profile before posting status.");
-    const text = prompt("Status text:");
-    if (!text) return;
-    db.status.unshift({ author: db.profile.name || db.auth.phone, text, type: "Text Status" });
-    renderStatus();
-    saveState();
+    renderAll(el.search.value);
   });
 
   el.voiceCallBtn.addEventListener("click", () => callFlow("Voice"));
@@ -347,7 +307,7 @@ function bindEvents() {
 
   el.attachBtn.addEventListener("click", () => el.fileInput.click());
   el.fileInput.addEventListener("change", () => {
-    const files = [...el.fileInput.files || []];
+    const files = [...(el.fileInput.files || [])];
     files.forEach((f) => sendMessage(`📎 ${f.name} (${Math.round(f.size / 1024)} KB)`));
     el.fileInput.value = "";
   });
@@ -358,18 +318,17 @@ function bindEvents() {
   });
 
   el.scheduleBtn.addEventListener("click", () => {
-    const value = Number(prompt("Schedule in seconds:", "10"));
-    if (!Number.isFinite(value) || value <= 0) return;
-    const msg = el.composerInput.value.trim();
-    if (!msg) return;
+    const secs = Number(prompt("Schedule in seconds", "10"));
+    if (!Number.isFinite(secs) || secs <= 0) return;
+    const text = el.composerInput.value.trim();
+    if (!text) return;
     el.composerInput.value = "";
-    setTimeout(() => sendMessage(`⏰ ${msg}`), value * 1000);
+    setTimeout(() => sendMessage(`⏰ ${text}`), secs * 1000);
   });
 
   el.recordBtn.addEventListener("click", async () => {
-    const chat = getActiveChat();
-    if (!chat) return openModal("No active chat", "Add/select a contact first.");
-    if (!navigator.mediaDevices?.getUserMedia) return openModal("Voice note", "Audio recording unavailable in this browser.");
+    if (!getActiveChat()) return openModal("No active chat", "Select a contact first.");
+    if (!navigator.mediaDevices?.getUserMedia) return openModal("Voice note", "Audio capture unavailable.");
 
     if (!state.voiceRecorder) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -397,19 +356,15 @@ function bindEvents() {
     const pass = prompt("Set local passcode:");
     if (!pass) return;
     localStorage.setItem("pulsemesh.passcode", btoa(pass));
-    openModal("Passcode", "Passcode set successfully.");
+    openModal("Passcode", "Passcode set.");
   });
 
-  el.seedBtn.addEventListener("click", async () => {
-    const seed = await generateSeedPhrase();
-    openModal("Recovery phrase", seed);
-  });
+  el.seedBtn.addEventListener("click", async () => openModal("Recovery phrase", await generateSeedPhrase()));
 
   el.exportBtn.addEventListener("click", async () => {
     const chat = getActiveChat();
-    if (!chat) return openModal("Nothing to export", "No active chat to export.");
-    const payload = await encryptExport(JSON.stringify(chat.messages, null, 2));
-    openModal("Encrypted Export", JSON.stringify(payload, null, 2));
+    if (!chat) return openModal("Nothing to export", "Select a chat first.");
+    openModal("Encrypted Export", JSON.stringify(await encryptExport(JSON.stringify(chat.messages, null, 2)), null, 2));
   });
 
   el.clearBtn.addEventListener("click", () => {
@@ -441,3 +396,4 @@ renderAll();
 bindEvents();
 setupPWA();
 updateStorageStats();
+if (!db.auth.loggedIn) showAuth();

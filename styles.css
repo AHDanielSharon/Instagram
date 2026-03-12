@@ -239,3 +239,32 @@ body {
   .left { max-height: 45vh; }
   .chat-head-tools { display: none; }
 }
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 6, 16, 0.72);
+  backdrop-filter: blur(4px);
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+}
+.auth-card {
+  width: min(520px, 96vw);
+  padding: 16px;
+}
+.auth-card h2 { margin: 0 0 6px; }
+.auth-card p { margin: 0 0 12px; color: var(--muted); font-size: .9rem; }
+.auth-form { display: grid; gap: 10px; }
+.auth-form label { display: grid; gap: 4px; font-size: .83rem; color: var(--muted); }
+.auth-form input {
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: rgba(0,0,0,.2);
+  color: var(--text);
+  padding: 10px;
+  outline: none;
+}
+.auth-actions { display: flex; gap: 8px; }
+#otpHint { color: var(--green); display: inline-block; margin-top: 8px; }
