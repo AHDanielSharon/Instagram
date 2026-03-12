@@ -4,10 +4,13 @@ const state = {
   installPromptEvent: null,
   voiceRecorder: null,
   recordedChunks: [],
-  generatedOtp: null
+  generatedOtp: null,
+  otpToken: null,
+  otpDelivery: "demo"
 };
 
-const storeKey = "pulsemesh.v4";
+const storeKey = "pulsemesh.v5";
+const OTP_ENDPOINT = window.PULSEMESH_OTP_ENDPOINT || localStorage.getItem("pulsemesh.otpEndpoint") || "";
 
 const db = {
   auth: { loggedIn: false, phone: "", verified: false },
@@ -126,9 +129,9 @@ function renderSettings() {
   const rows = [
     { title: "Phone", subtitle: db.auth.loggedIn ? db.auth.phone : "Not logged in" },
     { title: "Profile", subtitle: db.profile.created ? `${db.profile.name} • ${db.profile.about}` : "Not created" },
+    { title: "OTP Delivery", subtitle: state.otpDelivery === "real" ? "SMS via configured endpoint" : "Demo OTP fallback" },
     { title: "Contacts", subtitle: `${db.contacts.length} saved` },
-    { title: "Media", subtitle: "PDF, image, video, music, links, docs" },
-    { title: "Calls", subtitle: `${db.calls.length} history entries` }
+    { title: "Media", subtitle: "PDF, image, video, music, links, docs" }
   ];
   renderList(el.settingsPanel, rows, "No settings", "Settings will appear here.");
 }
@@ -165,9 +168,55 @@ function showAuth() {
   el.nameInput.value = db.profile.name || "";
   el.aboutInput.value = db.profile.about || "";
 }
+function hideAuth() { el.authOverlay.classList.add("hidden"); }
 
-function hideAuth() {
-  el.authOverlay.classList.add("hidden");
+async function tryWebOtp() {
+  if (!('OTPCredential' in window) || !navigator.credentials) return;
+  try {
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 60000);
+    const cred = await navigator.credentials.get({ otp: { transport: ['sms'] }, signal: ac.signal });
+    if (cred?.code) el.otpInput.value = cred.code;
+  } catch {}
+}
+
+async function sendOtp(phone) {
+  if (OTP_ENDPOINT) {
+    try {
+      const res = await fetch(OTP_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.message || "OTP send failed");
+      state.otpToken = data.otpToken || null;
+      state.otpDelivery = "real";
+      el.otpHint.textContent = "OTP sent to your phone.";
+      tryWebOtp();
+      return;
+    } catch (err) {
+      openModal("SMS provider error", `${err.message}\nFalling back to demo OTP.`);
+    }
+  }
+
+  state.generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
+  state.otpDelivery = "demo";
+  el.otpHint.textContent = `Demo OTP: ${state.generatedOtp}`;
+}
+
+async function verifyOtp(phone, otp) {
+  if (state.otpDelivery === "real" && OTP_ENDPOINT) {
+    const verifyEndpoint = OTP_ENDPOINT.replace(/send-otp\/?$/, "verify-otp");
+    const res = await fetch(verifyEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone, otp, otpToken: state.otpToken })
+    });
+    const data = await res.json();
+    return !!data?.success;
+  }
+  return otp === state.generatedOtp;
 }
 
 function addContactFlow() {
@@ -250,14 +299,13 @@ function bindEvents() {
   el.loginBtn.addEventListener("click", showAuth);
   el.newContactBtn.addEventListener("click", addContactFlow);
 
-  el.sendOtpBtn.addEventListener("click", () => {
+  el.sendOtpBtn.addEventListener("click", async () => {
     const phone = el.phoneInput.value.trim();
     if (!phoneOk(phone)) return openModal("Invalid number", "Enter phone like +919999999999.");
-    state.generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
-    el.otpHint.textContent = `Demo OTP: ${state.generatedOtp}`;
+    await sendOtp(phone);
   });
 
-  el.authForm.addEventListener("submit", (e) => {
+  el.authForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const phone = el.phoneInput.value.trim();
     const otp = el.otpInput.value.trim();
@@ -265,12 +313,16 @@ function bindEvents() {
     const about = el.aboutInput.value.trim() || "Available";
 
     if (!phoneOk(phone)) return openModal("Invalid number", "Enter valid phone with country code.");
-    if (!state.generatedOtp || otp !== state.generatedOtp) return openModal("OTP failed", "Please enter the correct OTP.");
+    if (!otp) return openModal("OTP required", "Please enter OTP.");
     if (!name) return openModal("Name required", "Please enter profile name.");
+
+    const ok = await verifyOtp(phone, otp);
+    if (!ok) return openModal("OTP failed", "Please enter the correct OTP.");
 
     db.auth = { loggedIn: true, phone, verified: true };
     db.profile = { name, about, created: true };
     state.generatedOtp = null;
+    state.otpToken = null;
     hideAuth();
     renderAll(el.search.value);
     openModal("Success", "Account created and logged in successfully.");
