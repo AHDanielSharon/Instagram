@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-label="PulseMesh icon">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4ef9ff"/>
+      <stop offset="55%" stop-color="#8f7bff"/>
+      <stop offset="100%" stop-color="#d66bff"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="#081126"/>
+  <circle cx="56" cy="56" r="28" fill="#4ef9ff" opacity="0.5" filter="url(#blur)"/>
+  <circle cx="140" cy="132" r="30" fill="#62ffa9" opacity="0.35" filter="url(#blur)"/>
+  <rect x="28" y="28" width="136" height="136" rx="34" fill="url(#g)"/>
+  <path d="M58 138V54h36c24 0 40 15 40 36s-16 34-40 34H82v14H58zm24-34h12c11 0 18-5 18-14s-7-15-18-15H82v29z" fill="#0a1126"/>
+</svg>
