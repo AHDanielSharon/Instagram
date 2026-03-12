@@ -11,7 +11,7 @@ const state = {
 };
 
 const storeKey = "pulsemesh.v6";
-const OTP_ENDPOINT = window.PULSEMESH_OTP_ENDPOINT || localStorage.getItem("pulsemesh.otpEndpoint") || "http://localhost:8787/send-otp";
+const OTP_ENDPOINT = window.PULSEMESH_OTP_ENDPOINT || localStorage.getItem("pulsemesh.otpEndpoint") || `${location.origin}/send-otp`;
 
 const db = {
   auth: { loggedIn: false, phone: "", verified: false },
